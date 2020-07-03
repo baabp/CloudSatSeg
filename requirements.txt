@@ -1,0 +1,76 @@
+numpy
+requests
+pandas
+tqdm
+pytz
+colorlover
+jupyter
+jupyterlab
+markdown
+freeze
+requests
+matplotlib
+seaborn
+plotly
+torch
+torchvision
+six>=1.12.0
+setuptools>=41.0.0
+tensorflow
+tensorboardx
+Pillow
+scikit-learn
+torchsummary
+h5py
+progressbar2
+tabulate
+vulture
+skorch
+optuna
+ax-platform
+botorch
+zope.dottedname
+pytorch-ignite
+catalyst
+pretrainedmodels
+segmentation-models-pytorch
+pytorch_toolbelt
+albumentations
+
+# # Data Generator
+# -e git+https://github.com/KDD-OpenSource/agots#egg=agots
+
+# -e git+https://github.com/pytorch/accimage
+
+captum
+tifffile
+
+# cv2 can be source of some troubles..
+opencv-python
+
+
+# Requirements for donut (https://github.com/korepwx/donut)
+# git+https://github.com/thu-ml/zhusuan.git
+# git+https://github.com/korepwx/tfsnippet.git@ecc0b4d1e610cf8cfa8c236857a7dabee27d5543
+# git+https://github.com/korepwx/donut.git
+
+# Requirements for dagmm (https://github.com/danieltan07/dagmm)
+# torch>=0.4.0
+# torchvision
+# Requirements for LSTM-Enc-Dec
+# argparse
+#pyparsing
+# cycler
+
+# Remaining requirements that should be installed if not already done so
+# numpy
+# pandas
+# tqdm
+# scipy>=0.14.0
+# scikit-learn>=0.19.1
+# tensorflow-gpu==1.13.0rc1
+# tensorflow-gpu==1.15
+# flake8
+# matplotlib
+
+# pytest==5.2.2

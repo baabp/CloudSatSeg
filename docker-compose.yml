@@ -1,0 +1,20 @@
+version: '2.4'
+services:
+  baabp-cloud_master:
+    container_name: baabp-cloud_master
+    build: .
+    image: baabp/cloud:torch-cuda
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+#      - ./web.env
+#    command: nvidia-smi
+    tty: true
+    command: /bin/bash
+    volumes:
+      - .:/src
+      - /home/taichi/workspace/kaggle_dataset:/dataset/kaggle
+    ports:
+      - "8008:8008"
+      - "6006:6006"
+      - "6007:6007"
