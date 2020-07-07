@@ -1,5 +1,6 @@
 import os
 import cv2
+from tqdm import tqdm
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -13,6 +14,8 @@ import segmentation_models_pytorch as smp
 from pathlib import Path
 
 import torch
+
+from utils.process import imap_unordered_bar, argwrapper
 
 
 # class CloudDataset(Dataset):
@@ -34,7 +37,20 @@ import torch
 
 # segmentation dataset
 class L8CLoudDataset(Dataset):
-    def __init__(self, base_dir, datatype='train', transforms=None, preprocessing=None, include_nir=True):
+    def __init__(self, base_dir, datatype='train', transforms=None, preprocessing=None, include_nir=True,
+                 non_null_rate=None, cloud_rate=None, processes=1):
+        """ get torch datasets
+
+        Args:
+            base_dir (str): path to dataset
+            datatype (str): 'train'-> training data, other -> test data
+            transforms (): torch transform
+            preprocessing (): preprocessing function
+            include_nir (): if True, include nir. If not, only RGB
+            non_null_rate (float or None): threshold of null pixel rate for picked image (0.0 or None: all, 1.0:no null)
+            cloud_rate (float or None): threshold of cloud rate for picked image (None: all, 0.0: include non cloud image, 1.0: only all clouded image)
+            processes (int): number of threads for calculating cloud rate in each images
+        """
 
         if datatype == 'train':
             self.data_dir = os.path.join(base_dir, '38-Cloud_training')
@@ -53,7 +69,18 @@ class L8CLoudDataset(Dataset):
         self.transforms = transforms
         self.preprocessing = preprocessing
         self.list_patch_names = pd.read_csv(path_patches).iloc[:, 0].tolist()
-        self.include_nir=include_nir
+        self.include_nir = include_nir
+
+        if (non_null_rate is not None) or (cloud_rate is not None):
+            df = self.get_df_ratio(processes=processes)
+            if non_null_rate is not None:
+                sr_bool = df.loc[:, 'non_null_rate'] >= non_null_rate
+            else:
+                sr_bool = df.loc[:, 'non_null_rate'] >= 0.0
+
+            if cloud_rate is not None:
+                sr_bool = sr_bool & (df.loc[:, 'cloud_rate'] >= cloud_rate)
+            self.list_patch_names = df.loc[sr_bool, 'patch_name'].tolist()
 
     def open_as_array(self, patch_name, include_nir=False, normalize=True):
         list_bands = ['red', 'green', 'blue']
@@ -78,6 +105,17 @@ class L8CLoudDataset(Dataset):
         raw_mask = np.where(raw_mask == mask_val, 1, 0)
         return np.expand_dims(raw_mask, 0) if add_dims else raw_mask
 
+    def open_url(self, patch_name, datatype='train'):
+        if datatype == 'train':
+            list_bands = ['red', 'green', 'blue', 'nir']
+            list_url = []
+            for band in list_bands:
+                list_url.append(os.path.join(self.dict_dir[band], band + '_' + patch_name + '.TIF'))
+            return list_url
+        else:
+            band = 'gt'
+            return os.path.join(self.dict_dir[band], band + '_' + patch_name + '.TIF')
+
     def __getitem__(self, idx):
         patch_name = self.list_patch_names[idx]
         img = self.open_as_array(patch_name, include_nir=self.include_nir, normalize=True)
@@ -97,6 +135,49 @@ class L8CLoudDataset(Dataset):
     def __len__(self):
         return len(self.list_patch_names)
 
+    def __geturl__(self, idx):
+        patch_name = self.list_patch_names[idx]
+        img_url = self.open_url(patch_name=patch_name, datatype='train')
+        mask_url = self.open_url(patch_name=patch_name, datatype='val')
+
+        return img_url, mask_url
+
+    def get_image_type(self, patch_name):
+        # patch_name = self.list_patch_names[idx]
+        img = self.open_as_array(patch_name, include_nir=self.include_nir, normalize=False)
+        mask = self.open_mask(patch_name, add_dims=False)
+        list_ratio = []
+        for band in range(img.shape[2]):
+            list_ratio.append(np.sum(img[:, :, band] != 0) / (img.shape[0] * img.shape[1]))
+        ratio = np.min(list_ratio)
+
+        # cloud rate
+        index_val = np.where(img[:, :, 0] != 0)
+        cloud_rate = mask[np.where(img[:, :, 0] != 0)].sum() / mask[np.where(img[:, :, 0] != 0)].shape[0]
+
+        return patch_name, ratio, cloud_rate
+
+    def get_df_ratio(self, processes=1):
+        if processes == 1:
+            list_out = []
+            for i, patch_name in tqdm(enumerate(self.list_patch_names)):
+                list_out.append(self.get_image_type(patch_name=patch_name))
+                # patch_name, ratio, cloud_rate = self.get_image_type(patch_name=patch_name)
+                # list_out.append([patch_name, ratio, cloud_rate])
+            df = pd.DataFrame(list_out, columns=['patch_name', 'non_null_rate', 'cloud_rate'])
+        elif processes > 1:
+            func_args = [(self.get_image_type, patch_name) for patch_name in self.list_patch_names]
+            list_out = imap_unordered_bar(argwrapper, func_args, n_processes=processes)
+            df = pd.DataFrame(list_out, columns=['patch_name', 'non_null_rate', 'cloud_rate'])
+            df_temp = pd.DataFrame(np.array(self.list_patch_names).T, columns=['patch_name'])
+            df = pd.merge(df_temp, df, on='patch_name', how='left')
+
+        else:
+            df = None
+
+        return df
+
+
 def get_training_augmentation():
     train_transform = [
         albu.HorizontalFlip(p=0.5),
@@ -107,12 +188,14 @@ def get_training_augmentation():
     ]
     return albu.Compose(train_transform)
 
+
 def get_validation_augmentation():
     """Add paddings to make image shape divisible by 32"""
     test_transform = [
         albu.Resize(320, 640)
     ]
     return albu.Compose(test_transform)
+
 
 def get_preprocessing(preprocessing_fn):
     """Construct preprocessing transform
@@ -131,11 +214,13 @@ def get_preprocessing(preprocessing_fn):
     ]
     return albu.Compose(_transform)
 
+
 def to_tensor(x, **kwargs):
     """
     Convert image or mask.
     """
     return x.transpose(2, 0, 1).astype('float32')
+
 
 def main():
     base_dir = '/dataset/kaggle/38-cloud'
@@ -143,9 +228,13 @@ def main():
     include_nir = True
     train_ratio = 0.8
 
+    non_null_rate = 1.0
+    cloud_rate = None
+    processes = 12
+
     # set transform
-    transforms_train = get_training_augmentation()  #albu.Compose([albu.HorizontalFlip()])
-    transforms_test = None #get_validation_augmentation()
+    transforms_train = get_training_augmentation()  # albu.Compose([albu.HorizontalFlip()])
+    transforms_test = None  # get_validation_augmentation()
 
     # preprocessing if smp
     ENCODER = 'resnet50'
@@ -155,11 +244,16 @@ def main():
     if include_nir:
         preprocessing = None
 
-
     dataset = L8CLoudDataset(base_dir=base_dir, datatype=datatype, transforms=transforms_train,
-                             preprocessing=preprocessing, include_nir=include_nir)
+                             preprocessing=preprocessing, include_nir=include_nir,
+                             non_null_rate=non_null_rate,
+                             cloud_rate=cloud_rate,
+                             processes=processes)
     img, mask = dataset.__getitem__(100)
+    # dataset.get_image_type(100)
     print(img.shape, mask.shape)
+    #
+    # df = dataset.get_df_ratio(processes=10)
 
     # divide training set and validation set
     n_samples = len(dataset)  # n_samples is 60000

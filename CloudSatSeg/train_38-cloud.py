@@ -56,6 +56,8 @@ def main():
 
     tb_log_dir = os.path.join(log_base_dir, "tb")
     dir_ckp = os.path.join(log_base_dir, "checkpoints")
+    if not os.path.exists(dir_ckp):
+        os.makedirs(dir_ckp)
 
     # set transform
     transforms_train = get_training_augmentation()  #albu.Compose([albu.HorizontalFlip()])
@@ -140,9 +142,12 @@ def main():
     # todo: check tensorboard
     # todo: Catalyst
     # todo: Catalyst with smp
+    # todo: ignite ???
     print(train_loss)
     print(valid_loss)
 
+    # todo: pred
+    # todo: check accuracy measure
 
 
 def train_org(model, train_dl, valid_dl, criterion, optimizer, device, acc_metric, dir_ckp, scheduler=None,
