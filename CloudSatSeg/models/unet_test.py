@@ -3,7 +3,7 @@ import torch
 
 
 class UNET(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, out_channels, in_channels=3):
         super().__init__()
 
         self.conv1 = self.contract_block(in_channels, 32, 7, 3)

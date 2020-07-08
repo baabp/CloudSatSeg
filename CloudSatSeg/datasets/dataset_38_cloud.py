@@ -123,11 +123,11 @@ class L8CLoudDataset(Dataset):
         if self.transforms is not None:
             augmented = self.transforms(image=img, mask=mask)
             img = augmented['image']
-            mask = augmented['mask']
+            mask = augmented['mask'].astype(np.int64)
         if self.preprocessing is not None:
             preprocessed = self.preprocessing(image=img, mask=mask)
             img = preprocessed['image']
-            mask = preprocessed['mask']
+            mask = preprocessed['mask'].astype(np.int64)
         else:
             img = to_tensor(img)
         return img, mask
@@ -181,10 +181,10 @@ class L8CLoudDataset(Dataset):
 def get_training_augmentation():
     train_transform = [
         albu.HorizontalFlip(p=0.5),
-        # albu.ShiftScaleRotate(scale_limit=0.5, rotate_limit=0, shift_limit=0.1, p=0.5, border_mode=0),
-        # albu.GridDistortion(p=0.5),
-        # albu.OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)#,
-        # albu.Resize(320, 640)
+        albu.ShiftScaleRotate(scale_limit=0.5, rotate_limit=0, shift_limit=0.1, p=0.5, border_mode=0),
+        albu.GridDistortion(p=0.5),
+        albu.OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5),
+        albu.Resize(320, 640)
     ]
     return albu.Compose(train_transform)
 
