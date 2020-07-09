@@ -4,6 +4,35 @@ import time
 
 import torch
 
+# todo: https://github.com/yoyoyo-yo/DeepLearningMugenKnock/blob/master/pytorch/UNet_Seg_VOC2012_pytorch.ipynb check
+
+def test_org(model, loader, device, criterion, acc_fn):
+    model.eval()
+    model.to(device)
+
+    running_acc = 0.0
+
+    total_loss = 0.
+
+    for i, (inputs, labels) in tqdm(enumerate(loader), total=len(loader)):
+        inputs = inputs.to(device)
+        labels = labels.to(device)
+        with torch.no_grad():
+            outputs = model(inputs)
+            _, preds = torch.max(outputs, 1)
+
+            loss = criterion(outputs, labels)
+
+            total_loss += loss.item()
+        acc = acc_fn(outputs, labels)
+        running_acc += acc * loader.batch_size
+
+    total_loss = total_loss / len(loader.dataset)
+    total_acc = running_acc / len(loader.dataset)
+    # metrics = {'loss': total_loss, 'acc': total_acc}
+
+    return total_loss
+
 
 def train_org(model, train_dl, valid_dl, criterion, optimizer, device, acc_metric, dir_ckp, scheduler=None,
               epochs=50, writer=None):

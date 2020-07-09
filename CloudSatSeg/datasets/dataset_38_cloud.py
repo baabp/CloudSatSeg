@@ -36,9 +36,10 @@ from utils.process import imap_unordered_bar, argwrapper
 #         return files
 
 # segmentation dataset
+# todo: if test folder non, return only train dataset
 class L8CLoudDataset(Dataset):
     def __init__(self, base_dir, datatype='train', transforms=None, preprocessing=None, include_nir=True,
-                 non_null_rate=None, cloud_rate=None, processes=1):
+                 non_null_rate=None, cloud_rate=None, processes=1, test_mask=True):
         """ get torch datasets
 
         Args:
@@ -50,9 +51,10 @@ class L8CLoudDataset(Dataset):
             non_null_rate (float or None): threshold of null pixel rate for picked image (0.0 or None: all, 1.0:no null)
             cloud_rate (float or None): threshold of cloud rate for picked image (None: all, 0.0: include non cloud image, 1.0: only all clouded image)
             processes (int): number of threads for calculating cloud rate in each images
+            test_mask (bool): if True, test dataset will also have mask. If False, only image data will be published
         """
-
-        if datatype == 'train':
+        self.datatype = datatype
+        if self.datatype == 'train':
             self.data_dir = os.path.join(base_dir, '38-Cloud_training')
             path_patches = os.path.join(self.data_dir, 'training_patches_38-Cloud.csv')
             label = 'train'
@@ -70,6 +72,7 @@ class L8CLoudDataset(Dataset):
         self.preprocessing = preprocessing
         self.list_patch_names = pd.read_csv(path_patches).iloc[:, 0].tolist()
         self.include_nir = include_nir
+        self.test_mask = test_mask
 
         if (non_null_rate is not None) or (cloud_rate is not None):
             df = self.get_df_ratio(processes=processes)
@@ -78,7 +81,7 @@ class L8CLoudDataset(Dataset):
             else:
                 sr_bool = df.loc[:, 'non_null_rate'] >= 0.0
 
-            if cloud_rate is not None:
+            if (cloud_rate is not None) and (not ((self.datatype != 'train') and (not self.test_mask))):
                 sr_bool = sr_bool & (df.loc[:, 'cloud_rate'] >= cloud_rate)
             self.list_patch_names = df.loc[sr_bool, 'patch_name'].tolist()
 
@@ -119,7 +122,11 @@ class L8CLoudDataset(Dataset):
     def __getitem__(self, idx):
         patch_name = self.list_patch_names[idx]
         img = self.open_as_array(patch_name, include_nir=self.include_nir, normalize=True)
-        mask = self.open_mask(patch_name, add_dims=False)
+        if (self.datatype != 'train') and not self.test_mask:
+            mask = np.zeros_like(img[:, :, 0]).astype(np.int64)
+        else:
+            mask = self.open_mask(patch_name, add_dims=False)
+
         if self.transforms is not None:
             augmented = self.transforms(image=img, mask=mask)
             img = augmented['image']
@@ -130,6 +137,7 @@ class L8CLoudDataset(Dataset):
             mask = preprocessed['mask'].astype(np.int64)
         else:
             img = to_tensor(img)
+
         return img, mask
 
     def __len__(self):
@@ -138,22 +146,29 @@ class L8CLoudDataset(Dataset):
     def __geturl__(self, idx):
         patch_name = self.list_patch_names[idx]
         img_url = self.open_url(patch_name=patch_name, datatype='train')
-        mask_url = self.open_url(patch_name=patch_name, datatype='val')
+        if (self.datatype != 'train') and not self.test_mask:
+            mask_url = None
+        else:
+            mask_url = self.open_url(patch_name=patch_name, datatype='val')
 
         return img_url, mask_url
 
     def get_image_type(self, patch_name):
         # patch_name = self.list_patch_names[idx]
         img = self.open_as_array(patch_name, include_nir=self.include_nir, normalize=False)
-        mask = self.open_mask(patch_name, add_dims=False)
         list_ratio = []
         for band in range(img.shape[2]):
             list_ratio.append(np.sum(img[:, :, band] != 0) / (img.shape[0] * img.shape[1]))
         ratio = np.min(list_ratio)
 
-        # cloud rate
-        index_val = np.where(img[:, :, 0] != 0)
-        cloud_rate = mask[np.where(img[:, :, 0] != 0)].sum() / mask[np.where(img[:, :, 0] != 0)].shape[0]
+        # todo: this can not read under no test data
+        if (self.datatype != 'train') and not self.test_mask:
+            cloud_rate = np.nan
+        else:
+            mask = self.open_mask(patch_name, add_dims=False)
+            # cloud rate
+            index_val = np.where(img[:, :, 0] != 0)
+            cloud_rate = mask[index_val].sum() / mask[index_val].shape[0]
 
         return patch_name, ratio, cloud_rate
 
