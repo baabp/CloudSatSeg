@@ -24,7 +24,7 @@ def main():
     # general
     debug = False
     epochs = 10
-    batch_size = 12
+    batch_size = 6
     num_workers = 0
     lr = 0.01
 
@@ -44,15 +44,20 @@ def main():
     name_preprocessing = 'xxxx'
 
     # model
-    model_name = 'unet_0'
-    out_channels = 2
+    model_name = 'unet_smp' #'unet_0' #'segnet' #'unet_0'
+    # out_channels = 2
+    # kwargs_model = {
+    #     'out_channels': 2,
+    #     'in_channels': 4
+    # }
     kwargs_model = {
+        'classes': 2,
         'in_channels': 4
     }
     resume = None
 
     # log
-    log_base_dir = "./logs/38_cloud_test"
+    log_base_dir = os.path.join("./logs/38_cloud_test", model_name)
 
     non_null_rate = 1.0
     cloud_rate = None
@@ -95,7 +100,7 @@ def main():
     }
 
     # model
-    model = get_model(name=model_name, out_channels=out_channels, **kwargs_model)
+    model = get_model(name=model_name, **kwargs_model)
     model.to(device)
     if resume is not None:
         model.load_state_dict(torch.load(resume, map_location=device))

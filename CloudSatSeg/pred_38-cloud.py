@@ -56,7 +56,7 @@ def main():
     resume = os.path.join("./logs/38_cloud_test/checkpoints", "cls_epoch_9.pth")
 
     # log
-    log_base_dir = "./logs/38_cloud_test"
+    log_base_dir = os.path.join("./logs/38_cloud_test", model_name)
 
     non_null_rate = 1.0
     cloud_rate = None
@@ -114,6 +114,7 @@ def main():
                  fig_img_size=4, cmp_input='gray',
                  cmp_out='jet', class_num=2)
 
+    # todo: add other models from nock, old torchsat, xxxx(to many one)
     # todo: Catalyst
     # todo: Catalyst with smp
     # todo: ignite ???
